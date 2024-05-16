@@ -534,6 +534,7 @@ func TestContexts(t *testing.T) {
 	}{
 		{"github.action", "push", "github-context"},
 		{"github.event.commits[0].message", nil, "github-context-noexist-prop"},
+		{"allspice.repository", "fake-repository", "allspice-repository"},
 		{"fromjson('{\"commits\":[]}').commits[0].message", nil, "github-context-noexist-prop"},
 		{"github.event.pull_request.labels.*.name", nil, "github-context-noexist-prop"},
 		{"env.TEST", "value", "env-context"},
@@ -568,6 +569,9 @@ func TestContexts(t *testing.T) {
 	env := &EvaluationEnvironment{
 		Github: &model.GithubContext{
 			Action: "push",
+
+			// AllSpice
+			Repository: "fake-repository",
 		},
 		Env: map[string]string{
 			"TEST": "value",
