@@ -1,0 +1,21 @@
+name: checks
+on:
+  - push
+  - pull_request
+
+jobs:
+  lint:
+    name: check and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: vet checks
+        run: go vet -v ./...
+      - name: build
+        run: go build -v ./...
+      - name: test
+        run: | # Test only the new packages in this fork. Add more packages as needed. 
+          go test -v ./pkg/jobparser
