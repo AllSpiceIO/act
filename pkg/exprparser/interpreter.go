@@ -157,6 +157,8 @@ func (impl *interperterImpl) evaluateVariable(variableNode *actionlint.VariableN
 		return impl.env.Github, nil
 	case "gitea": // compatible with Gitea
 		return impl.env.Github, nil
+	case "allspice":
+		return impl.env.Github, nil
 	case "env":
 		return impl.env.Env, nil
 	case "job":
