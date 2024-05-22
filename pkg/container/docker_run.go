@@ -424,6 +424,31 @@ func (cr *containerReference) mergeContainerConfigs(ctx context.Context, config 
 		logger.Warn("--network and --net in the options will be ignored.")
 	}
 	hostConfig.NetworkMode = networkMode
+
+	// The following options are not available when using the
+	// container networking mode, so we clear them. See
+	// https://docs.docker.com/network/#container-networks for
+	// documentation. Since we're linking the networking to another
+	// container, these should implicitly be the same value.
+	if hostConfig.NetworkMode.IsContainer() {
+		// --add-host
+		hostConfig.ExtraHosts = nil
+		// --hostname
+		config.Hostname = ""
+		// --dns
+		hostConfig.DNS = nil
+		// --dns-search
+		hostConfig.DNSSearch = nil
+		// --dns-options
+		hostConfig.DNSOptions = nil
+		// --mac-address
+		config.MacAddress = ""
+		// --publish
+		config.ExposedPorts = nil
+		// --publish-all
+		hostConfig.PublishAllPorts = false
+	}
+
 	logger.Debugf("Merged container.HostConfig ==> %+v", hostConfig)
 
 	return config, hostConfig, nil
