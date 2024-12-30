@@ -186,6 +186,60 @@ func TestParseRawOn(t *testing.T) {
 				},
 			},
 		},
+		{
+			input: `on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+        type: choice
+        options:
+        - info
+        - warning
+        - debug
+      tags:
+        description: 'Test scenario tags'
+        required: false
+        type: boolean
+      environment:
+        description: 'Environment to run tests against'
+        type: environment
+        required: true
+  push:
+`,
+			result: []*Event{
+				{
+					Name: "workflow_dispatch",
+					inputs: []WorkflowDispatchInput{
+						{
+							Name:        "logLevel",
+							Description: "Log level",
+							Required:    true,
+							Default:     "warning",
+							Type:        "choice",
+							Options:     []string{"info", "warning", "debug"},
+						},
+						{
+							Name:        "tags",
+							Description: "Test scenario tags",
+							Required:    false,
+							Type:        "boolean",
+						},
+						{
+							Name:        "environment",
+							Description: "Environment to run tests against",
+							Type:        "environment",
+							Required:    true,
+						},
+					},
+				},
+				{
+					Name: "push",
+				},
+			},
+		},
 	}
 	for _, kase := range kases {
 		t.Run(kase.input, func(t *testing.T) {
@@ -230,8 +284,7 @@ func TestParseMappingNode(t *testing.T) {
 		{
 			input:   "on:\n  push:\n    branches:\n      - master",
 			scalars: []string{"push"},
-			datas: []interface {
-			}{
+			datas: []interface{}{
 				map[string]interface{}{
 					"branches": []interface{}{"master"},
 				},

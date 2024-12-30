@@ -185,6 +185,8 @@ func NewReusableWorkflowRunner(rc *RunContext) (Runner, error) {
 		eventJSON: rc.EventJSON,
 		caller: &caller{
 			runContext: rc,
+
+			reusedWorkflowJobResults: map[string]string{}, // For Gitea
 		},
 	}
 

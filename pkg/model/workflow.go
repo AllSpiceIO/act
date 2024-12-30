@@ -1,6 +1,7 @@
 package model
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"reflect"
@@ -8,9 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nektos/act/pkg/common"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
+
+	"github.com/nektos/act/pkg/common"
 )
 
 // Workflow is the structure of the files in .github/workflows
@@ -714,6 +716,12 @@ func (s *Step) Type() StepType {
 		return StepTypeUsesActionLocal
 	}
 	return StepTypeUsesActionRemote
+}
+
+// UsesHash returns a hash of the uses string.
+// For Gitea.
+func (s *Step) UsesHash() string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(s.Uses)))
 }
 
 // ReadWorkflow returns a list of jobs for a given workflow file reader

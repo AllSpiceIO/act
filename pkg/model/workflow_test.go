@@ -603,3 +603,37 @@ func TestReadWorkflow_WorkflowDispatchConfig(t *testing.T) {
 		Type:     "choice",
 	}, workflowDispatch.Inputs["logLevel"])
 }
+
+func TestStep_UsesHash(t *testing.T) {
+	type fields struct {
+		Uses string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name: "regular",
+			fields: fields{
+				Uses: "https://gitea.com/testa/testb@v3",
+			},
+			want: "ae437878e9f285bd7518c58664f9fabbb12d05feddd7169c01702a2a14322aa8",
+		},
+		{
+			name: "empty",
+			fields: fields{
+				Uses: "",
+			},
+			want: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Step{
+				Uses: tt.fields.Uses,
+			}
+			assert.Equalf(t, tt.want, s.UsesHash(), "UsesHash()")
+		})
+	}
+}
