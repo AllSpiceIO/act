@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	docker_container "github.com/docker/docker/api/types/container"
@@ -86,6 +87,9 @@ func (c Config) GetToken() string {
 
 type caller struct {
 	runContext *RunContext
+
+	updateResultLock         sync.Mutex        // For Gitea
+	reusedWorkflowJobResults map[string]string // For Gitea
 }
 
 type runnerImpl struct {
