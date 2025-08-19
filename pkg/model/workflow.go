@@ -23,6 +23,8 @@ type Workflow struct {
 	Env      map[string]string `yaml:"env"`
 	Jobs     map[string]*Job   `yaml:"jobs"`
 	Defaults Defaults          `yaml:"defaults"`
+
+	RawConcurrency *RawConcurrency `yaml:"concurrency"` // For Gitea
 }
 
 // On events for the workflow
@@ -768,4 +770,11 @@ func decodeNode(node yaml.Node, out interface{}) bool {
 		return false
 	}
 	return true
+}
+
+// For Gitea
+// RawConcurrency represents a workflow concurrency or a job concurrency with uninterpolated options
+type RawConcurrency struct {
+	Group            string `yaml:"group,omitempty"`
+	CancelInProgress string `yaml:"cancel-in-progress,omitempty"`
 }

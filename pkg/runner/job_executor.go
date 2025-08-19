@@ -73,10 +73,6 @@ func newJobExecutor(info jobInfo, sf stepFactory, rc *RunContext) common.Executo
 
 		preExec := step.pre()
 		preSteps = append(preSteps, useStepLogger(rc, stepModel, stepStagePre, func(ctx context.Context) error {
-			if rc.caller != nil { // For Gitea
-				rc.caller.reusedWorkflowJobResults[rc.JobName] = "pending"
-			}
-
 			logger := common.Logger(ctx)
 			preErr := preExec(ctx)
 			if preErr != nil {
@@ -189,34 +185,7 @@ func setJobResult(ctx context.Context, info jobInfo, rc *RunContext, success boo
 	info.result(jobResult)
 	if rc.caller != nil {
 		// set reusable workflow job result
-
-		rc.caller.updateResultLock.Lock()
-		rc.caller.reusedWorkflowJobResults[rc.JobName] = jobResult
-
-		allJobDone := true
-		hasFailure := false
-		for _, result := range rc.caller.reusedWorkflowJobResults {
-			if result == "pending" {
-				allJobDone = false
-				break
-			}
-			if result == "failure" {
-				hasFailure = true
-			}
-		}
-
-		if allJobDone {
-			reusedWorkflowJobResult := "success"
-			reusedWorkflowJobResultMessage := "succeeded"
-			if hasFailure {
-				reusedWorkflowJobResult = "failure"
-				reusedWorkflowJobResultMessage = "failed"
-			}
-			rc.caller.runContext.result(reusedWorkflowJobResult)
-			logger.WithField("jobResult", reusedWorkflowJobResult).Infof("\U0001F3C1  Job %s", reusedWorkflowJobResultMessage)
-		}
-
-		rc.caller.updateResultLock.Unlock()
+		rc.caller.setReusedWorkflowJobResult(rc.JobName, jobResult) // For Gitea
 		return
 	}
 

@@ -16,6 +16,7 @@ func NewInterpeter(
 	gitCtx *model.GithubContext,
 	results map[string]*JobResult,
 	vars map[string]string,
+	inputs map[string]interface{},
 ) exprparser.Interpreter {
 	strategy := make(map[string]interface{})
 	if job.Strategy != nil {
@@ -62,7 +63,7 @@ func NewInterpeter(
 		Strategy: strategy,
 		Matrix:   matrix,
 		Needs:    using,
-		Inputs:   nil, // not supported yet
+		Inputs:   inputs,
 		Vars:     vars,
 	}
 
