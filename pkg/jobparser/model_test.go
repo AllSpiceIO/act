@@ -59,6 +59,19 @@ func TestParseRawOn(t *testing.T) {
 			},
 		},
 		{
+			input: "on:\n  push:\n    branches: main",
+			result: []*Event{
+				{
+					Name: "push",
+					acts: map[string][]string{
+						"branches": {
+							"main",
+						},
+					},
+				},
+			},
+		},
+		{
 			input: "on:\n  branch_protection_rule:\n    types: [created, deleted]",
 			result: []*Event{
 				{

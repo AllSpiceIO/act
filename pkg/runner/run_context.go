@@ -92,7 +92,12 @@ func (rc *RunContext) GetEnv() map[string]string {
 }
 
 func (rc *RunContext) jobContainerName() string {
-	return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
+	nameParts := []string{rc.Config.ContainerNamePrefix, "WORKFLOW-" + rc.Run.Workflow.Name, "JOB-" + rc.Name}
+	if rc.caller != nil {
+		nameParts = append(nameParts, "CALLED-BY-"+rc.caller.runContext.JobName)
+	}
+	// return createSimpleContainerName(rc.Config.ContainerNamePrefix, "WORKFLOW-"+rc.Run.Workflow.Name, "JOB-"+rc.Name)
+	return createSimpleContainerName(nameParts...) // For Gitea
 }
 
 // Deprecated: use `networkNameForGitea`
@@ -653,6 +658,7 @@ func (rc *RunContext) Executor() (common.Executor, error) {
 	return func(ctx context.Context) error {
 		res, err := rc.isEnabled(ctx)
 		if err != nil {
+			rc.caller.setReusedWorkflowJobResult(rc.JobName, "failure") // For Gitea
 			return err
 		}
 		if res {
@@ -748,6 +754,10 @@ func (rc *RunContext) isEnabled(ctx context.Context) (bool, error) {
 	}
 
 	if !runJob {
+		if rc.caller != nil { // For Gitea
+			rc.caller.setReusedWorkflowJobResult(rc.JobName, "skipped")
+			return false, nil
+		}
 		l.WithField("jobResult", "skipped").Debugf("Skipping job '%s' due to '%s'", job.Name, job.If.Value)
 		return false, nil
 	}

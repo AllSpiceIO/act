@@ -175,7 +175,11 @@ func newReusableWorkflowExecutor(rc *RunContext, directory string, workflow stri
 			return err
 		}
 
-		return runner.NewPlanExecutor(plan)(ctx)
+		// return runner.NewPlanExecutor(plan)(ctx)
+		return common.NewPipelineExecutor( // For Gitea
+			runner.NewPlanExecutor(plan),
+			setReusedWorkflowCallerResult(rc, runner),
+		)(ctx)
 	}
 }
 
@@ -269,5 +273,49 @@ func newRemoteReusableWorkflow(uses string) *remoteReusableWorkflow {
 		Filename: matches[3],
 		Ref:      matches[4],
 		URL:      "https://github.com",
+	}
+}
+
+// For Gitea
+func setReusedWorkflowCallerResult(rc *RunContext, runner Runner) common.Executor {
+	return func(ctx context.Context) error {
+		logger := common.Logger(ctx)
+
+		runnerImpl, ok := runner.(*runnerImpl)
+		if !ok {
+			logger.Warn("Failed to get caller from runner")
+			return nil
+		}
+		caller := runnerImpl.caller
+
+		allJobDone := true
+		hasFailure := false
+		for _, result := range caller.reusedWorkflowJobResults {
+			if result == "pending" {
+				allJobDone = false
+				break
+			}
+			if result == "failure" {
+				hasFailure = true
+			}
+		}
+
+		if allJobDone {
+			reusedWorkflowJobResult := "success"
+			reusedWorkflowJobResultMessage := "succeeded"
+			if hasFailure {
+				reusedWorkflowJobResult = "failure"
+				reusedWorkflowJobResultMessage = "failed"
+			}
+
+			if rc.caller != nil {
+				rc.caller.setReusedWorkflowJobResult(rc.JobName, reusedWorkflowJobResult)
+			} else {
+				rc.result(reusedWorkflowJobResult)
+				logger.WithField("jobResult", reusedWorkflowJobResult).Infof("\U0001F3C1  Job %s", reusedWorkflowJobResultMessage)
+			}
+		}
+
+		return nil
 	}
 }
