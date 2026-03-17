@@ -3,7 +3,7 @@ package jobparser
 import (
 	"github.com/nektos/act/pkg/exprparser"
 	"github.com/nektos/act/pkg/model"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // NewInterpeter returns an interpeter used in the server,

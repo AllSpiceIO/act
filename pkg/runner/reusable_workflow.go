@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -77,8 +78,7 @@ func newRemoteReusableWorkflowExecutor(rc *RunContext) common.Executor {
 		return newActionCacheReusableWorkflowExecutor(rc, filename, remoteReusableWorkflow)
 	}
 
-	// FIXME: if the reusable workflow is from a private repository, we need to provide a token to access the repository.
-	token := ""
+	token := getGitCloneToken(rc.Config, remoteReusableWorkflow.CloneURL())
 
 	return common.NewPipelineExecutor(
 		newMutexExecutor(cloneIfRequired(rc, *remoteReusableWorkflow, workflowDir, token)),
@@ -142,12 +142,14 @@ func cloneIfRequired(rc *RunContext, remoteReusableWorkflow remoteReusableWorkfl
 			return notExists
 		},
 		func(ctx context.Context) error {
+			// interpolate the cloneURL
+			cloneURL := rc.NewExpressionEvaluator(ctx).Interpolate(ctx, remoteReusableWorkflow.CloneURL())
 			// Do not change the remoteReusableWorkflow.URL, because:
 			// 	1. Gitea doesn't support specifying GithubContext.ServerURL by the GITHUB_SERVER_URL env
 			//	2. Gitea has already full URL with rc.Config.GitHubInstance when calling newRemoteReusableWorkflowWithPlat
 			// remoteReusableWorkflow.URL = rc.getGithubContext(ctx).ServerURL
 			return git.NewGitCloneExecutor(git.NewGitCloneExecutorInput{
-				URL:         remoteReusableWorkflow.CloneURL(),
+				URL:         cloneURL,
 				Ref:         remoteReusableWorkflow.Ref,
 				Dir:         targetDirectory,
 				Token:       token,
@@ -318,4 +320,31 @@ func setReusedWorkflowCallerResult(rc *RunContext, runner Runner) common.Executo
 
 		return nil
 	}
+}
+
+// For Gitea
+// getGitCloneToken returns GITEA_TOKEN when shouldCloneURLUseToken returns true,
+// otherwise returns an empty string
+func getGitCloneToken(conf *Config, cloneURL string) string {
+	if !shouldCloneURLUseToken(conf.GitHubInstance, cloneURL) {
+		return ""
+	}
+	return conf.GetToken()
+}
+
+// For Gitea
+// shouldCloneURLUseToken returns true when the following conditions are met:
+// 1. cloneURL is from the same Gitea instance that the runner is registered to
+// 2. the cloneURL does not have basic auth embedded
+func shouldCloneURLUseToken(instanceURL, cloneURL string) bool {
+	u1, err1 := url.Parse(instanceURL)
+	u2, err2 := url.Parse(cloneURL)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if u2.User != nil {
+		return false
+	}
+
+	return u1.Host == u2.Host
 }

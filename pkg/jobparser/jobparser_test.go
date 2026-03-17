@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 func TestParse(t *testing.T) {
@@ -49,6 +49,11 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "job_name_with_matrix",
+			options: nil,
+			wantErr: false,
+		},
+		{
+			name:    "prefixed_newline",
 			options: nil,
 			wantErr: false,
 		},

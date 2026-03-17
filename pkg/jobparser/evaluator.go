@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/nektos/act/pkg/exprparser"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // ExpressionEvaluator is copied from runner.expressionEvaluator,

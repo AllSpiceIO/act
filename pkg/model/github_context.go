@@ -39,6 +39,9 @@ type GithubContext struct {
 	ServerURL        string                 `json:"server_url"`
 	APIURL           string                 `json:"api_url"`
 	GraphQLURL       string                 `json:"graphql_url"`
+
+	// For Gitea
+	RunAttempt string `json:"run_attempt"`
 }
 
 func asString(v interface{}) string {

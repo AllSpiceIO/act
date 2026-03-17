@@ -33,8 +33,8 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/timshannon/bolthold v0.0.0-20210913165410-232392fc8a6a
 	go.etcd.io/bbolt v1.3.9
+	go.yaml.in/yaml/v4 v4.0.0-rc.2
 	golang.org/x/term v0.18.0
-	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1
 )
 
@@ -89,4 +89,5 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

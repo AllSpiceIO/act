@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -101,12 +102,30 @@ func NewParallelExecutor(parallel int, executors ...Executor) Executor {
 			parallel = 1
 		}
 
+		log.Infof("NewParallelExecutor: Creating %d workers for %d executors", parallel, len(executors))
+
 		for i := 0; i < parallel; i++ {
-			go func(work <-chan Executor, errs chan<- error) {
+			go func(workerID int, work <-chan Executor, errs chan<- error) {
+				log.Debugf("Worker %d started", workerID)
+				taskCount := 0
 				for executor := range work {
-					errs <- executor(ctx)
+					taskCount++
+					log.Debugf("Worker %d executing task %d", workerID, taskCount)
+					// Recover from panics in executors to avoid crashing the worker
+					// goroutine which would leave the runner process hung.
+					// https://gitea.com/gitea/act_runner/issues/371
+					errs <- func() (err error) {
+						defer func() {
+							if r := recover(); r != nil {
+								log.Errorf("panic in executor: %v\n%s", r, debug.Stack())
+								err = fmt.Errorf("panic: %v", r)
+							}
+						}()
+						return executor(ctx)
+					}()
 				}
-			}(work, errs)
+				log.Debugf("Worker %d finished (%d tasks executed)", workerID, taskCount)
+			}(i, work, errs)
 		}
 
 		for i := 0; i < len(executors); i++ {
