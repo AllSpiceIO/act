@@ -903,6 +903,7 @@ func (rc *RunContext) getGithubContext(ctx context.Context) *model.GithubContext
 			ghc.Event = preset.Event
 			ghc.RunID = preset.RunID
 			ghc.RunNumber = preset.RunNumber
+			ghc.RunAttempt = preset.RunAttempt
 			ghc.Actor = preset.Actor
 			ghc.Repository = preset.Repository
 			ghc.EventName = preset.EventName
@@ -1065,6 +1066,7 @@ func (rc *RunContext) withGithubEnv(ctx context.Context, github *model.GithubCon
 		env["GITHUB_SERVER_URL"] = instance
 		env["GITHUB_API_URL"] = instance + "/api/v1" // the version of Gitea is v1
 		env["GITHUB_GRAPHQL_URL"] = ""               // Gitea doesn't support graphql
+		env["GITHUB_RUN_ATTEMPT"] = github.RunAttempt
 	}
 
 	if rc.Config.ArtifactServerPath != "" {

@@ -4,7 +4,7 @@ This is a custom fork of [nektos/act](https://github.com/nektos/act/), for the p
 
 It cannot be used as command line tool anymore, but only as a library.
 
-It's a soft fork, which means that it will tracking the latest release of nektos/act.
+It's a soft fork, which means that it will track the latest release of nektos/act.
 
 Branches:
 

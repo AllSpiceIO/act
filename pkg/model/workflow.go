@@ -10,21 +10,21 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 
 	"github.com/nektos/act/pkg/common"
 )
 
 // Workflow is the structure of the files in .github/workflows
 type Workflow struct {
-	File     string
-	Name     string            `yaml:"name"`
-	RawOn    yaml.Node         `yaml:"on"`
-	Env      map[string]string `yaml:"env"`
-	Jobs     map[string]*Job   `yaml:"jobs"`
-	Defaults Defaults          `yaml:"defaults"`
-
-	RawConcurrency *RawConcurrency `yaml:"concurrency"` // For Gitea
+	File           string
+	Name           string            `yaml:"name"`
+	RawOn          yaml.Node         `yaml:"on"`
+	Env            map[string]string `yaml:"env"`
+	Jobs           map[string]*Job   `yaml:"jobs"`
+	Defaults       Defaults          `yaml:"defaults"`
+	RawConcurrency *RawConcurrency   `yaml:"concurrency"`
+	RawPermissions yaml.Node         `yaml:"permissions"`
 }
 
 // On events for the workflow
@@ -201,6 +201,7 @@ type Job struct {
 	Uses           string                    `yaml:"uses"`
 	With           map[string]interface{}    `yaml:"with"`
 	RawSecrets     yaml.Node                 `yaml:"secrets"`
+	RawPermissions yaml.Node                 `yaml:"permissions"`
 	Result         string
 }
 
@@ -395,6 +396,7 @@ func (j *Job) Matrix() map[string][]interface{} {
 func (j *Job) GetMatrixes() ([]map[string]interface{}, error) {
 	matrixes := make([]map[string]interface{}, 0)
 	if j.Strategy != nil {
+		// Always set these values, even if there's an error later
 		j.Strategy.FailFast = j.Strategy.GetFailFast()
 		j.Strategy.MaxParallel = j.Strategy.GetMaxParallel()
 
@@ -777,4 +779,22 @@ func decodeNode(node yaml.Node, out interface{}) bool {
 type RawConcurrency struct {
 	Group            string `yaml:"group,omitempty"`
 	CancelInProgress string `yaml:"cancel-in-progress,omitempty"`
+	RawExpression    string `yaml:"-,omitempty"`
+}
+
+type objectConcurrency RawConcurrency
+
+func (r *RawConcurrency) UnmarshalYAML(n *yaml.Node) error {
+	if err := n.Decode(&r.RawExpression); err == nil {
+		return nil
+	}
+	return n.Decode((*objectConcurrency)(r))
+}
+
+func (r *RawConcurrency) MarshalYAML() (interface{}, error) {
+	if r.RawExpression != "" {
+		return r.RawExpression, nil
+	}
+
+	return (*objectConcurrency)(r), nil
 }

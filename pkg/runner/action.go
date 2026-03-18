@@ -176,8 +176,9 @@ func runActionImpl(step actionStep, actionDir string, remoteAction *remoteAction
 
 		logger.Debugf("type=%v actionDir=%s actionPath=%s workdir=%s actionCacheDir=%s actionName=%s containerActionDir=%s", stepModel.Type(), actionDir, actionPath, rc.Config.Workdir, rc.ActionCacheDir(), actionName, containerActionDir)
 
-		switch action.Runs.Using {
-		case model.ActionRunsUsingNode12, model.ActionRunsUsingNode16, model.ActionRunsUsingNode20:
+		x := action.Runs.Using
+		switch {
+		case x.IsNode():
 			if err := maybeCopyToActionDir(ctx, step, actionDir, actionPath, containerActionDir); err != nil {
 				return err
 			}
@@ -187,19 +188,19 @@ func runActionImpl(step actionStep, actionDir string, remoteAction *remoteAction
 			rc.ApplyExtraPath(ctx, step.getEnv())
 
 			return rc.execJobContainer(containerArgs, *step.getEnv(), "", "")(ctx)
-		case model.ActionRunsUsingDocker:
+		case x.IsDocker():
 			location := actionLocation
 			if remoteAction == nil {
 				location = containerActionDir
 			}
 			return execAsDocker(ctx, step, actionName, location, remoteAction == nil)
-		case model.ActionRunsUsingComposite:
+		case x.IsComposite():
 			if err := maybeCopyToActionDir(ctx, step, actionDir, actionPath, containerActionDir); err != nil {
 				return err
 			}
 
 			return execAsComposite(step)(ctx)
-		case model.ActionRunsUsingGo:
+		case x == model.ActionRunsUsingGo:
 			if err := maybeCopyToActionDir(ctx, step, actionDir, actionPath, containerActionDir); err != nil {
 				return err
 			}
@@ -220,6 +221,7 @@ func runActionImpl(step actionStep, actionDir string, remoteAction *remoteAction
 				model.ActionRunsUsingNode12,
 				model.ActionRunsUsingNode16,
 				model.ActionRunsUsingNode20,
+				model.ActionRunsUsingNode24,
 				model.ActionRunsUsingComposite,
 				model.ActionRunsUsingGo,
 			}, action.Runs.Using))
@@ -508,11 +510,10 @@ func shouldRunPreStep(step actionStep) common.Conditional {
 func hasPreStep(step actionStep) common.Conditional {
 	return func(ctx context.Context) bool {
 		action := step.getActionModel()
-		return action.Runs.Using == model.ActionRunsUsingComposite ||
-			((action.Runs.Using == model.ActionRunsUsingNode12 ||
-				action.Runs.Using == model.ActionRunsUsingNode16 ||
-				action.Runs.Using == model.ActionRunsUsingNode20 ||
-				action.Runs.Using == model.ActionRunsUsingGo) &&
+		return action.Runs.Using.IsComposite() ||
+			(action.Runs.Using.IsNode() &&
+				action.Runs.Pre != "") ||
+			(action.Runs.Using == model.ActionRunsUsingGo &&
 				action.Runs.Pre != "")
 	}
 }
@@ -526,8 +527,9 @@ func runPreStep(step actionStep) common.Executor {
 		stepModel := step.getStepModel()
 		action := step.getActionModel()
 
-		switch action.Runs.Using {
-		case model.ActionRunsUsingNode12, model.ActionRunsUsingNode16, model.ActionRunsUsingNode20:
+		x := action.Runs.Using
+		switch {
+		case x.IsNode():
 			// defaults in pre steps were missing, however provided inputs are available
 			populateEnvsFromInput(ctx, step.getEnv(), action, rc)
 			// todo: refactor into step
@@ -561,7 +563,7 @@ func runPreStep(step actionStep) common.Executor {
 
 			return rc.execJobContainer(containerArgs, *step.getEnv(), "", "")(ctx)
 
-		case model.ActionRunsUsingComposite:
+		case x.IsComposite():
 			if step.getCompositeSteps() == nil {
 				step.getCompositeRunContext(ctx)
 			}
@@ -571,7 +573,7 @@ func runPreStep(step actionStep) common.Executor {
 			}
 			return fmt.Errorf("missing steps in composite action")
 
-		case model.ActionRunsUsingGo:
+		case x == model.ActionRunsUsingGo:
 			// defaults in pre steps were missing, however provided inputs are available
 			populateEnvsFromInput(ctx, step.getEnv(), action, rc)
 			// todo: refactor into step
@@ -642,11 +644,10 @@ func shouldRunPostStep(step actionStep) common.Conditional {
 func hasPostStep(step actionStep) common.Conditional {
 	return func(ctx context.Context) bool {
 		action := step.getActionModel()
-		return action.Runs.Using == model.ActionRunsUsingComposite ||
-			((action.Runs.Using == model.ActionRunsUsingNode12 ||
-				action.Runs.Using == model.ActionRunsUsingNode16 ||
-				action.Runs.Using == model.ActionRunsUsingNode20 ||
-				action.Runs.Using == model.ActionRunsUsingGo) &&
+		return action.Runs.Using.IsComposite() ||
+			(action.Runs.Using.IsNode() &&
+				action.Runs.Post != "") ||
+			(action.Runs.Using == model.ActionRunsUsingGo &&
 				action.Runs.Post != "")
 	}
 }
@@ -680,8 +681,9 @@ func runPostStep(step actionStep) common.Executor {
 
 		_, containerActionDir := getContainerActionPaths(stepModel, actionLocation, rc)
 
-		switch action.Runs.Using {
-		case model.ActionRunsUsingNode12, model.ActionRunsUsingNode16, model.ActionRunsUsingNode20:
+		x := action.Runs.Using
+		switch {
+		case x.IsNode():
 
 			populateEnvsFromSavedState(step.getEnv(), step, rc)
 
@@ -692,7 +694,7 @@ func runPostStep(step actionStep) common.Executor {
 
 			return rc.execJobContainer(containerArgs, *step.getEnv(), "", "")(ctx)
 
-		case model.ActionRunsUsingComposite:
+		case x.IsComposite():
 			if err := maybeCopyToActionDir(ctx, step, actionDir, actionPath, containerActionDir); err != nil {
 				return err
 			}
@@ -702,7 +704,7 @@ func runPostStep(step actionStep) common.Executor {
 			}
 			return fmt.Errorf("missing steps in composite action")
 
-		case model.ActionRunsUsingGo:
+		case x == model.ActionRunsUsingGo:
 			populateEnvsFromSavedState(step.getEnv(), step, rc)
 			rc.ApplyExtraPath(ctx, step.getEnv())
 

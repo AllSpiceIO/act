@@ -6,8 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 
+	"github.com/nektos/act/pkg/exprparser"
 	"github.com/nektos/act/pkg/model"
 )
 
@@ -40,6 +41,10 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid jobs: %w", err)
 	}
+
+	evaluator := NewExpressionEvaluator(exprparser.NewInterpeter(&exprparser.EvaluationEnvironment{Github: pc.gitContext, Vars: pc.vars, Inputs: pc.inputs}, exprparser.Config{}))
+	workflow.RunName = evaluator.Interpolate(workflow.RunName)
+
 	for i, id := range ids {
 		job := jobs[i]
 		matricxes, err := getMatrixes(origin.GetJob(id))
@@ -52,7 +57,7 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 				job.Name = id
 			}
 			job.Strategy.RawMatrix = encodeMatrix(matrix)
-			evaluator := NewExpressionEvaluator(NewInterpeter(id, origin.GetJob(id), matrix, pc.gitContext, results, pc.vars, nil))
+			evaluator := NewExpressionEvaluator(NewInterpeter(id, origin.GetJob(id), matrix, pc.gitContext, results, pc.vars, pc.inputs))
 			job.Name = nameWithMatrix(job.Name, matrix, evaluator)
 			runsOn := origin.GetJob(id).RunsOn()
 			for i, v := range runsOn {
@@ -60,10 +65,12 @@ func Parse(content []byte, options ...ParseOption) ([]*SingleWorkflow, error) {
 			}
 			job.RawRunsOn = encodeRunsOn(runsOn)
 			swf := &SingleWorkflow{
-				Name:     workflow.Name,
-				RawOn:    workflow.RawOn,
-				Env:      workflow.Env,
-				Defaults: workflow.Defaults,
+				Name:           workflow.Name,
+				RawOn:          workflow.RawOn,
+				Env:            workflow.Env,
+				Defaults:       workflow.Defaults,
+				RawPermissions: workflow.RawPermissions,
+				RunName:        workflow.RunName,
 			}
 			if err := swf.SetJob(id, job); err != nil {
 				return nil, fmt.Errorf("SetJob: %w", err)
@@ -92,10 +99,17 @@ func WithVars(vars map[string]string) ParseOption {
 	}
 }
 
+func WithInputs(inputs map[string]any) ParseOption {
+	return func(c *parseContext) {
+		c.inputs = inputs
+	}
+}
+
 type parseContext struct {
 	jobResults map[string]string
 	gitContext *model.GithubContext
 	vars       map[string]string
+	inputs     map[string]any
 }
 
 type ParseOption func(c *parseContext)

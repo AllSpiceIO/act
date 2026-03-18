@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // ActionRunsUsing is the type of runner for the action
@@ -20,7 +20,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 	// Force input to lowercase for case insensitive comparison
 	format := ActionRunsUsing(strings.ToLower(using))
 	switch format {
-	case ActionRunsUsingNode20, ActionRunsUsingNode16, ActionRunsUsingNode12, ActionRunsUsingDocker, ActionRunsUsingComposite, ActionRunsUsingGo:
+	case ActionRunsUsingNode24, ActionRunsUsingNode20, ActionRunsUsingNode16, ActionRunsUsingNode12, ActionRunsUsingDocker, ActionRunsUsingComposite, ActionRunsUsingGo:
 		*a = format
 	default:
 		return fmt.Errorf(fmt.Sprintf("The runs.using key in action.yml must be one of: %v, got %s", []string{
@@ -29,6 +29,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 			ActionRunsUsingNode12,
 			ActionRunsUsingNode16,
 			ActionRunsUsingNode20,
+			ActionRunsUsingNode24,
 			ActionRunsUsingGo,
 		}, format))
 	}
@@ -42,6 +43,8 @@ const (
 	ActionRunsUsingNode16 = "node16"
 	// ActionRunsUsingNode20 for running with node20
 	ActionRunsUsingNode20 = "node20"
+	// ActionRunsUsingNode24 for running with node24
+	ActionRunsUsingNode24 = "node24"
 	// ActionRunsUsingDocker for running with docker
 	ActionRunsUsingDocker = "docker"
 	// ActionRunsUsingComposite for running composite
@@ -49,6 +52,23 @@ const (
 	// ActionRunsUsingGo for running with go
 	ActionRunsUsingGo = "go"
 )
+
+func (a ActionRunsUsing) IsNode() bool {
+	switch a {
+	case ActionRunsUsingNode12, ActionRunsUsingNode16, ActionRunsUsingNode20, ActionRunsUsingNode24:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a ActionRunsUsing) IsDocker() bool {
+	return a == ActionRunsUsingDocker
+}
+
+func (a ActionRunsUsing) IsComposite() bool {
+	return a == ActionRunsUsingComposite
+}
 
 // ActionRuns are a field in Action
 type ActionRuns struct {

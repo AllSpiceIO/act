@@ -74,6 +74,7 @@ type Config struct {
 	JobLoggerLevel        *log.Level                   // the level of job logger
 	ValidVolumes          []string                     // only volumes (and bind mounts) in this slice can be mounted on the job container or service containers
 	InsecureSkipTLS       bool                         // whether to skip verifying TLS certificate of the Gitea instance
+	MaxParallel           int                          // max parallel jobs to run across all workflows (0 = no limit, uses CPU count)
 }
 
 // GetToken: Adapt to Gitea
@@ -193,12 +194,20 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 
 				maxParallel := 4
 				if job.Strategy != nil {
+					// Ensure GetMaxParallel() is called if MaxParallel is still 0
+					if job.Strategy.MaxParallel == 0 {
+						job.Strategy.MaxParallel = job.Strategy.GetMaxParallel()
+					}
 					maxParallel = job.Strategy.MaxParallel
+					log.Debugf("Using job.Strategy.MaxParallel: %d", maxParallel)
 				}
 
 				if len(matrixes) < maxParallel {
+					log.Debugf("Adjusting maxParallel from %d to %d (number of matrix combinations)", maxParallel, len(matrixes))
 					maxParallel = len(matrixes)
 				}
+
+				log.Infof("Running job with maxParallel=%d for %d matrix combinations", maxParallel, len(matrixes))
 
 				for i, matrix := range matrixes {
 					matrix := matrix
@@ -226,12 +235,39 @@ func (runner *runnerImpl) NewPlanExecutor(plan *model.Plan) common.Executor {
 				}
 				pipeline = append(pipeline, common.NewParallelExecutor(maxParallel, stageExecutor...))
 			}
-			ncpu := runtime.NumCPU()
-			if 1 > ncpu {
-				ncpu = 1
+
+			// For pipeline execution:
+			// - If only 1 element: run it directly (no need for additional parallelization)
+			// - If multiple elements: run them in parallel up to maxParallel or ncpu
+			if len(pipeline) == 0 {
+				return nil
 			}
-			log.Debugf("Detected CPUs: %d", ncpu)
-			return common.NewParallelExecutor(ncpu, pipeline...)(ctx)
+
+			if len(pipeline) == 1 {
+				// Single run/job: execute directly without additional parallelization wrapper
+				// This ensures max-parallel is the only limiting factor
+				log.Debugf("Single pipeline element, executing directly")
+				return pipeline[0](ctx)
+			}
+
+			// Multiple runs/jobs: execute in parallel up to maxParallel (if set) or ncpu
+			parallelism := runtime.NumCPU()
+
+			// If MaxParallel is set in config, use it
+			if runner.config.MaxParallel > 0 {
+				parallelism = runner.config.MaxParallel
+				log.Debugf("Using configured max-parallel: %d", parallelism)
+			} else {
+				log.Debugf("Using CPU count for parallelism: %d", parallelism)
+			}
+
+			// Don't exceed the number of pipeline elements
+			if parallelism > len(pipeline) {
+				parallelism = len(pipeline)
+			}
+
+			log.Infof("Executing %d pipeline elements with parallelism %d", len(pipeline), parallelism)
+			return common.NewParallelExecutor(parallelism, pipeline...)(ctx)
 		})
 	}
 

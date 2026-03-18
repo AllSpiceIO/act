@@ -5,16 +5,18 @@ import (
 	"fmt"
 
 	"github.com/nektos/act/pkg/model"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // SingleWorkflow is a workflow with single job and single matrix
 type SingleWorkflow struct {
-	Name     string            `yaml:"name,omitempty"`
-	RawOn    yaml.Node         `yaml:"on,omitempty"`
-	Env      map[string]string `yaml:"env,omitempty"`
-	RawJobs  yaml.Node         `yaml:"jobs,omitempty"`
-	Defaults Defaults          `yaml:"defaults,omitempty"`
+	Name           string            `yaml:"name,omitempty"`
+	RawOn          yaml.Node         `yaml:"on,omitempty"`
+	Env            map[string]string `yaml:"env,omitempty"`
+	RawJobs        yaml.Node         `yaml:"jobs,omitempty"`
+	Defaults       Defaults          `yaml:"defaults,omitempty"`
+	RawPermissions yaml.Node         `yaml:"permissions,omitempty"`
+	RunName        string            `yaml:"run-name,omitempty"`
 }
 
 func (w *SingleWorkflow) Job() (string, *Job) {
@@ -48,16 +50,18 @@ func (w *SingleWorkflow) SetJob(id string, job *Job) error {
 	m := map[string]*Job{
 		id: job,
 	}
-	out, err := yaml.Marshal(m)
-	if err != nil {
-		return err
-	}
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	encoder.Encode(m)
+	encoder.Close()
+
 	node := yaml.Node{}
-	if err := yaml.Unmarshal(out, &node); err != nil {
+	if err := yaml.Unmarshal(buf.Bytes(), &node); err != nil {
 		return err
 	}
 	if len(node.Content) != 1 || node.Content[0].Kind != yaml.MappingNode {
-		return fmt.Errorf("can not set job: %q", out)
+		return fmt.Errorf("can not set job: %s", buf.String())
 	}
 	w.RawJobs = *node.Content[0]
 	return nil
@@ -84,6 +88,7 @@ type Job struct {
 	With           map[string]interface{}    `yaml:"with,omitempty"`
 	RawSecrets     yaml.Node                 `yaml:"secrets,omitempty"`
 	RawConcurrency *model.RawConcurrency     `yaml:"concurrency,omitempty"`
+	RawPermissions yaml.Node                 `yaml:"permissions,omitempty"`
 }
 
 func (j *Job) Clone() *Job {
@@ -107,6 +112,7 @@ func (j *Job) Clone() *Job {
 		With:           j.With,
 		RawSecrets:     j.RawSecrets,
 		RawConcurrency: j.RawConcurrency,
+		RawPermissions: j.RawPermissions,
 	}
 }
 
@@ -272,9 +278,21 @@ func EvaluateConcurrency(rc *model.RawConcurrency, jobID string, job *Job, gitCt
 	}
 
 	evaluator := NewExpressionEvaluator(NewInterpeter(jobID, actJob, matrix, toGitContext(gitCtx), results, vars, inputs))
-	group := evaluator.Interpolate(rc.Group)
-	cancelInProgress := evaluator.Interpolate(rc.CancelInProgress)
-	return group, cancelInProgress == "true", nil
+	var node yaml.Node
+	if err := node.Encode(rc); err != nil {
+		return "", false, fmt.Errorf("failed to encode concurrency: %w", err)
+	}
+	if err := evaluator.EvaluateYamlNode(&node); err != nil {
+		return "", false, fmt.Errorf("failed to evaluate concurrency: %w", err)
+	}
+	var evaluated model.RawConcurrency
+	if err := node.Decode(&evaluated); err != nil {
+		return "", false, fmt.Errorf("failed to unmarshal evaluated concurrency: %w", err)
+	}
+	if evaluated.RawExpression != "" {
+		return evaluated.RawExpression, false, nil
+	}
+	return evaluated.Group, evaluated.CancelInProgress == "true", nil
 }
 
 func toGitContext(input map[string]any) *model.GithubContext {
