@@ -23,7 +23,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 	case ActionRunsUsingNode24, ActionRunsUsingNode20, ActionRunsUsingNode16, ActionRunsUsingNode12, ActionRunsUsingDocker, ActionRunsUsingComposite, ActionRunsUsingGo:
 		*a = format
 	default:
-		return fmt.Errorf(fmt.Sprintf("The runs.using key in action.yml must be one of: %v, got %s", []string{
+		return fmt.Errorf("The runs.using key in action.yml must be one of: %v, got %s", []string{
 			ActionRunsUsingComposite,
 			ActionRunsUsingDocker,
 			ActionRunsUsingNode12,
@@ -31,7 +31,7 @@ func (a *ActionRunsUsing) UnmarshalYAML(unmarshal func(interface{}) error) error
 			ActionRunsUsingNode20,
 			ActionRunsUsingNode24,
 			ActionRunsUsingGo,
-		}, format))
+		}, format)
 	}
 	return nil
 }

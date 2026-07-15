@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	docker_container "github.com/docker/docker/api/types/container"
+	docker_container "github.com/moby/moby/api/types/container"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/nektos/act/pkg/common"

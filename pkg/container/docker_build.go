@@ -7,13 +7,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/pkg/archive"
+	"github.com/moby/go-archive"
+	"github.com/moby/moby/client"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 
-	// github.com/docker/docker/builder/dockerignore is deprecated
-	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/moby/patternmatcher"
+	"github.com/moby/patternmatcher/ignorefile"
 
 	"github.com/nektos/act/pkg/common"
 )
@@ -40,12 +41,17 @@ func NewDockerBuildExecutor(input NewDockerBuildExecutorInput) common.Executor {
 		logger.Debugf("Building image from '%v'", input.ContextDir)
 
 		tags := []string{input.ImageTag}
-		options := types.ImageBuildOptions{
+		options := client.ImageBuildOptions{
 			Tags:        tags,
 			Remove:      true,
-			Platform:    input.Platform,
 			AuthConfigs: LoadDockerAuthConfigs(ctx),
 			Dockerfile:  input.Dockerfile,
+		}
+		if input.Platform != "" {
+			parts := strings.SplitN(input.Platform, "/", 2)
+			if len(parts) == 2 {
+				options.Platforms = []specs.Platform{{OS: parts[0], Architecture: parts[1]}}
+			}
 		}
 		var buildContext io.ReadCloser
 		if input.BuildContext != nil {
@@ -73,7 +79,7 @@ func createBuildContext(ctx context.Context, contextDir string, relDockerfile st
 	common.Logger(ctx).Debugf("Creating archive for build context dir '%s' with relative dockerfile '%s'", contextDir, relDockerfile)
 
 	// And canonicalize dockerfile name to a platform-independent one
-	relDockerfile = archive.CanonicalTarNameForPath(relDockerfile)
+	relDockerfile = filepath.ToSlash(relDockerfile)
 
 	f, err := os.Open(filepath.Join(contextDir, ".dockerignore"))
 	if err != nil && !os.IsNotExist(err) {
@@ -83,7 +89,7 @@ func createBuildContext(ctx context.Context, contextDir string, relDockerfile st
 
 	var excludes []string
 	if err == nil {
-		excludes, err = dockerignore.ReadAll(f)
+		excludes, err = ignorefile.ReadAll(f)
 		if err != nil {
 			return nil, err
 		}
