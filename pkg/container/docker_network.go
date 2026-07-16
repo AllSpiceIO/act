@@ -22,7 +22,8 @@ func NewDockerNetworkCreateExecutor(name string) common.Executor {
 		if err != nil {
 			return err
 		}
-		common.Logger(ctx).Debugf("%v", networks)
+		// For Gitea, reduce log noise
+		// common.Logger(ctx).Debugf("%v", networks)
 		for _, network := range networks.Items {
 			if network.Name == name {
 				common.Logger(ctx).Debugf("Network %v exists", name)
@@ -56,7 +57,8 @@ func NewDockerNetworkRemoveExecutor(name string) common.Executor {
 		if err != nil {
 			return err
 		}
-		common.Logger(ctx).Debugf("%v", networks)
+		// For Gitea, reduce log noise
+		// common.Logger(ctx).Debugf("%v", networks)
 		for _, net := range networks.Items {
 			if net.Name == name {
 				result, err := cli.NetworkInspect(ctx, net.ID, client.NetworkInspectOptions{})
