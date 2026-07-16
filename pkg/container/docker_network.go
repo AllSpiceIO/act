@@ -5,8 +5,7 @@ package container
 import (
 	"context"
 
-	"github.com/docker/docker/api/types"
-
+	"github.com/moby/moby/client"
 	"github.com/nektos/act/pkg/common"
 )
 
@@ -19,20 +18,20 @@ func NewDockerNetworkCreateExecutor(name string) common.Executor {
 		defer cli.Close()
 
 		// Only create the network if it doesn't exist
-		networks, err := cli.NetworkList(ctx, types.NetworkListOptions{})
+		networks, err := cli.NetworkList(ctx, client.NetworkListOptions{})
 		if err != nil {
 			return err
 		}
 		// For Gitea, reduce log noise
 		// common.Logger(ctx).Debugf("%v", networks)
-		for _, network := range networks {
+		for _, network := range networks.Items {
 			if network.Name == name {
 				common.Logger(ctx).Debugf("Network %v exists", name)
 				return nil
 			}
 		}
 
-		_, err = cli.NetworkCreate(ctx, name, types.NetworkCreate{
+		_, err = cli.NetworkCreate(ctx, name, client.NetworkCreateOptions{
 			Driver: "bridge",
 			Scope:  "local",
 		})
@@ -52,23 +51,23 @@ func NewDockerNetworkRemoveExecutor(name string) common.Executor {
 		}
 		defer cli.Close()
 
-		// Make shure that all network of the specified name are removed
+		// Make sure that all network of the specified name are removed
 		// cli.NetworkRemove refuses to remove a network if there are duplicates
-		networks, err := cli.NetworkList(ctx, types.NetworkListOptions{})
+		networks, err := cli.NetworkList(ctx, client.NetworkListOptions{})
 		if err != nil {
 			return err
 		}
 		// For Gitea, reduce log noise
 		// common.Logger(ctx).Debugf("%v", networks)
-		for _, network := range networks {
-			if network.Name == name {
-				result, err := cli.NetworkInspect(ctx, network.ID, types.NetworkInspectOptions{})
+		for _, net := range networks.Items {
+			if net.Name == name {
+				result, err := cli.NetworkInspect(ctx, net.ID, client.NetworkInspectOptions{})
 				if err != nil {
 					return err
 				}
 
-				if len(result.Containers) == 0 {
-					if err = cli.NetworkRemove(ctx, network.ID); err != nil {
+				if len(result.Network.Containers) == 0 {
+					if _, err = cli.NetworkRemove(ctx, net.ID, client.NetworkRemoveOptions{}); err != nil {
 						common.Logger(ctx).Debugf("%v", err)
 					}
 				} else {

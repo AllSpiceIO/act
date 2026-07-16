@@ -6,8 +6,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
+	cerrdefs "github.com/containerd/errdefs"
+	"github.com/moby/moby/client"
+	"github.com/nektos/act/pkg/common"
 )
 
 // ImageExistsLocally returns a boolean indicating if an image with the
@@ -19,16 +20,21 @@ func ImageExistsLocally(ctx context.Context, imageName string, platform string) 
 	}
 	defer cli.Close()
 
-	inspectImage, _, err := cli.ImageInspectWithRaw(ctx, imageName)
-	if client.IsErrNotFound(err) {
+	inspectImage, err := cli.ImageInspect(ctx, imageName)
+	if cerrdefs.IsNotFound(err) {
 		return false, nil
 	} else if err != nil {
 		return false, err
 	}
 
-	if platform == "" || platform == "any" || fmt.Sprintf("%s/%s", inspectImage.Os, inspectImage.Architecture) == platform {
+	imagePlatform := fmt.Sprintf("%s/%s", inspectImage.Os, inspectImage.Architecture)
+
+	if platform == "" || platform == "any" || imagePlatform == platform {
 		return true, nil
 	}
+
+	logger := common.Logger(ctx)
+	logger.Infof("image found but platform does not match: %s (image) != %s (platform)\n", imagePlatform, platform)
 
 	return false, nil
 }
@@ -42,14 +48,14 @@ func RemoveImage(ctx context.Context, imageName string, force bool, pruneChildre
 	}
 	defer cli.Close()
 
-	inspectImage, _, err := cli.ImageInspectWithRaw(ctx, imageName)
-	if client.IsErrNotFound(err) {
+	inspectImage, err := cli.ImageInspect(ctx, imageName)
+	if cerrdefs.IsNotFound(err) {
 		return false, nil
 	} else if err != nil {
 		return false, err
 	}
 
-	if _, err = cli.ImageRemove(ctx, inspectImage.ID, types.ImageRemoveOptions{
+	if _, err = cli.ImageRemove(ctx, inspectImage.ID, client.ImageRemoveOptions{
 		Force:         force,
 		PruneChildren: pruneChildren,
 	}); err != nil {
