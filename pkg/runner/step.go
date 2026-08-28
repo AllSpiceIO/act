@@ -131,14 +131,7 @@ func runStepExecutor(step step, stage stepStage, executor common.Executor) commo
 			(*step.getEnv())["GITEA_STEP_SUMMARY"] = (*step.getEnv())["GITHUB_STEP_SUMMARY"]
 		}
 
-		{
-			// For AllSpice
-			(*step.getEnv())["ALLSPICE_OUTPUT"] = (*step.getEnv())["GITHUB_OUTPUT"]
-			(*step.getEnv())["ALLSPICE_STATE"] = (*step.getEnv())["GITHUB_STATE"]
-			(*step.getEnv())["ALLSPICE_PATH"] = (*step.getEnv())["GITHUB_PATH"]
-			(*step.getEnv())["ALLSPICE_ENV"] = (*step.getEnv())["GITHUB_ENV"]
-			(*step.getEnv())["ALLSPICE_STEP_SUMMARY"] = (*step.getEnv())["GITHUB_STEP_SUMMARY"]
-		}
+		mirrorGithubEnvToAllSpice(*step.getEnv())
 
 		_ = rc.JobContainer.Copy(actPath, &container.FileEntry{
 			Name: outputFileCommand,
