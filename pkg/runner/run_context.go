@@ -1088,6 +1088,20 @@ func (rc *RunContext) withGithubEnv(ctx context.Context, github *model.GithubCon
 	return env
 }
 
+func mirrorGithubEnvToAllSpice(env map[string]string) {
+	keysToMirror := []string{}
+
+	for key := range env {
+		if strings.HasPrefix(key, "GITHUB_") {
+			keysToMirror = append(keysToMirror, strings.TrimPrefix(key, "GITHUB_"))
+		}
+	}
+
+	for _, trimmedKey := range keysToMirror {
+		env["ALLSPICE_"+trimmedKey] = env["GITHUB_"+trimmedKey]
+	}
+}
+
 func setActionRuntimeVars(rc *RunContext, env map[string]string) {
 	actionsRuntimeURL := os.Getenv("ACTIONS_RUNTIME_URL")
 	if actionsRuntimeURL == "" {

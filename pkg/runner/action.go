@@ -240,6 +240,8 @@ func setupActionEnv(ctx context.Context, step actionStep, _ *remoteAction) error
 	populateEnvsFromSavedState(step.getEnv(), step, rc)
 	populateEnvsFromInput(ctx, step.getEnv(), step.getActionModel(), rc)
 
+	mirrorGithubEnvToAllSpice(*step.getEnv())
+
 	return nil
 }
 
