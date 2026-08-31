@@ -1006,27 +1006,78 @@ func (cr *containerReference) wait() common.Executor {
 }
 
 // For Gitea
+// volumeRule is one compiled valid_volumes entry. An entry ending in `:ro`
+// allows the source but forces the mount read-only; an unmarked entry allows
+// the source and preserves the requested mode.
+type volumeRule struct {
+	pattern  glob.Glob
+	readOnly bool
+}
+
+func compileVolumeRules(ctx context.Context, validVolumes []string) []volumeRule {
+	logger := common.Logger(ctx)
+
+	rules := make([]volumeRule, 0, len(validVolumes))
+	for _, v := range validVolumes {
+		source, readOnly := strings.CutSuffix(v, ":ro")
+		if g, err := glob.Compile(source); err != nil {
+			logger.Errorf("create glob from %s error: %v", source, err)
+		} else {
+			rules = append(rules, volumeRule{pattern: g, readOnly: readOnly})
+		}
+	}
+	return rules
+}
+
+// matchVolumeRules reports whether a mount source is allowed and whether it
+// must be read-only. Rules are checked in configuration order and the last
+// matching rule wins.
+func matchVolumeRules(rules []volumeRule, source string) (allowed, readOnly bool) {
+	for _, r := range rules {
+		if r.pattern.Match(source) {
+			allowed = true
+			readOnly = r.readOnly
+		}
+	}
+	return allowed, readOnly
+}
+
+// forceBindReadOnly rewrites a parsed bind spec's mode to `ro`, keeping other
+// options such as SELinux labels and propagation modifiers.
+func forceBindReadOnly(bind, source, target string) string {
+	base := source + ":" + target
+	if bind == base {
+		return bind + ":ro"
+	}
+
+	rawOptions, hasOptions := strings.CutPrefix(bind, base+":")
+	if !hasOptions {
+		return bind + ":ro"
+	}
+	opts := strings.Split(rawOptions, ",")
+	sanitized := make([]string, 0, len(opts)+1)
+	hasMode := false
+	for _, o := range opts {
+		if o == "rw" {
+			o = "ro"
+		}
+		if o == "ro" {
+			hasMode = true
+		}
+		sanitized = append(sanitized, o)
+	}
+	if !hasMode {
+		sanitized = append(sanitized, "ro")
+	}
+	return base + ":" + strings.Join(sanitized, ",")
+}
+
 // sanitizeConfig remove the invalid configurations from `config` and `hostConfig`
 func (cr *containerReference) sanitizeConfig(ctx context.Context, config *container.Config, hostConfig *container.HostConfig) (*container.Config, *container.HostConfig) {
 	logger := common.Logger(ctx)
 
 	if len(cr.input.ValidVolumes) > 0 {
-		globs := make([]glob.Glob, 0, len(cr.input.ValidVolumes))
-		for _, v := range cr.input.ValidVolumes {
-			if g, err := glob.Compile(v); err != nil {
-				logger.Errorf("create glob from %s error: %v", v, err)
-			} else {
-				globs = append(globs, g)
-			}
-		}
-		isValid := func(v string) bool {
-			for _, g := range globs {
-				if g.Match(v) {
-					return true
-				}
-			}
-			return false
-		}
+		rules := compileVolumeRules(ctx, cr.input.ValidVolumes)
 		// sanitize binds
 		sanitizedBinds := make([]string, 0, len(hostConfig.Binds))
 		for _, bind := range hostConfig.Binds {
@@ -1040,21 +1091,29 @@ func (cr *containerReference) sanitizeConfig(ctx context.Context, config *contai
 				sanitizedBinds = append(sanitizedBinds, bind)
 				continue
 			}
-			if isValid(parsed.Source) {
-				sanitizedBinds = append(sanitizedBinds, bind)
-			} else {
+			allowed, readOnly := matchVolumeRules(rules, parsed.Source)
+			if !allowed {
 				logger.Warnf("[%s] is not a valid volume, will be ignored", parsed.Source)
+				continue
 			}
+			if readOnly && !parsed.ReadOnly {
+				bind = forceBindReadOnly(bind, parsed.Source, parsed.Target)
+			}
+			sanitizedBinds = append(sanitizedBinds, bind)
 		}
 		hostConfig.Binds = sanitizedBinds
 		// sanitize mounts
 		sanitizedMounts := make([]mount.Mount, 0, len(hostConfig.Mounts))
 		for _, mt := range hostConfig.Mounts {
-			if isValid(mt.Source) {
-				sanitizedMounts = append(sanitizedMounts, mt)
-			} else {
+			allowed, readOnly := matchVolumeRules(rules, mt.Source)
+			if !allowed {
 				logger.Warnf("[%s] is not a valid volume, will be ignored", mt.Source)
+				continue
 			}
+			if readOnly {
+				mt.ReadOnly = true
+			}
+			sanitizedMounts = append(sanitizedMounts, mt)
 		}
 		hostConfig.Mounts = sanitizedMounts
 	} else {
