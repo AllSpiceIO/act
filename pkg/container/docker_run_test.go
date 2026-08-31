@@ -258,10 +258,12 @@ var _ ExecutionsEnvironment = &containerReference{}
 
 func TestCheckVolumes(t *testing.T) {
 	testCases := []struct {
-		desc          string
-		validVolumes  []string
-		binds         []string
-		expectedBinds []string
+		desc           string
+		validVolumes   []string
+		binds          []string
+		mounts         []mount.Mount
+		expectedBinds  []string
+		expectedMounts []mount.Mount
 	}{
 		{
 			desc:         "match all volumes",
@@ -313,6 +315,97 @@ func TestCheckVolumes(t *testing.T) {
 				"/etc/conf.d/base.json:/config/base.json",
 			},
 		},
+		{
+			desc:          "read-only entry forces a bind read-only",
+			validVolumes:  []string{"/etc/ssl/certs/ca-certificates.crt:ro"},
+			binds:         []string{"/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt"},
+			expectedBinds: []string{"/etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro"},
+		},
+		{
+			desc:          "read-only entry rewrites a requested rw mode",
+			validVolumes:  []string{"/host/toolcache:ro"},
+			binds:         []string{"/host/toolcache:/opt/hostedtoolcache:rw"},
+			expectedBinds: []string{"/host/toolcache:/opt/hostedtoolcache:ro"},
+		},
+		{
+			desc:          "unmarked entry preserves the requested rw mode",
+			validVolumes:  []string{"/home/test/data"},
+			binds:         []string{"/home/test/data:/test_data:rw"},
+			expectedBinds: []string{"/home/test/data:/test_data:rw"},
+		},
+		{
+			desc:          "already read-only bind stays read-only",
+			validVolumes:  []string{"/home/test/data:ro"},
+			binds:         []string{"/home/test/data:/test_data:ro"},
+			expectedBinds: []string{"/home/test/data:/test_data:ro"},
+		},
+		{
+			desc:          "read-only entry keeps other bind modifiers",
+			validVolumes:  []string{"/home/test/data:ro"},
+			binds:         []string{"/home/test/data:/test_data:z"},
+			expectedBinds: []string{"/home/test/data:/test_data:z,ro"},
+		},
+		{
+			desc:          "read-only entry handles Windows drive paths without a mode",
+			validVolumes:  []string{"C:/host/data:ro"},
+			binds:         []string{"C:/host/data:D:/container/data"},
+			expectedBinds: []string{"C:/host/data:D:/container/data:ro"},
+		},
+		{
+			desc:          "non-matching bind is dropped when read-only rules exist",
+			validVolumes:  []string{"/home/test/data:ro"},
+			binds:         []string{"/secrets/keys:/keys"},
+			expectedBinds: []string{},
+		},
+		{
+			desc: "last matching rule wins for overlapping entries",
+			validVolumes: []string{
+				"/data/**",
+				"/data/cache:ro",
+			},
+			binds: []string{
+				"/data/cache:/cache",
+				"/data/tool:/tool",
+			},
+			expectedBinds: []string{
+				"/data/cache:/cache:ro",
+				"/data/tool:/tool",
+			},
+		},
+		{
+			desc: "internally appended exact entry stays writable",
+			validVolumes: []string{
+				"/**:ro",
+				"/var/run/docker.sock",
+			},
+			binds: []string{
+				"/var/run/docker.sock:/var/run/docker.sock",
+				"/etc/passwd:/pw",
+			},
+			expectedBinds: []string{
+				"/var/run/docker.sock:/var/run/docker.sock",
+				"/etc/passwd:/pw:ro",
+			},
+		},
+		{
+			desc:         "read-only entry forces a long-form mount read-only",
+			validVolumes: []string{"/etc/ssl/certs/ca-certificates.crt:ro"},
+			mounts: []mount.Mount{
+				{
+					Type:   mount.TypeBind,
+					Source: "/etc/ssl/certs/ca-certificates.crt",
+					Target: "/etc/ssl/certs/ca-certificates.crt",
+				},
+			},
+			expectedMounts: []mount.Mount{
+				{
+					Type:     mount.TypeBind,
+					Source:   "/etc/ssl/certs/ca-certificates.crt",
+					Target:   "/etc/ssl/certs/ca-certificates.crt",
+					ReadOnly: true,
+				},
+			},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
@@ -323,8 +416,15 @@ func TestCheckVolumes(t *testing.T) {
 					ValidVolumes: tc.validVolumes,
 				},
 			}
-			_, hostConf := cr.sanitizeConfig(ctx, &container.Config{}, &container.HostConfig{Binds: tc.binds})
+			_, hostConf := cr.sanitizeConfig(ctx, &container.Config{}, &container.HostConfig{Binds: tc.binds, Mounts: tc.mounts})
+			if tc.expectedBinds == nil {
+				tc.expectedBinds = []string{}
+			}
+			if tc.expectedMounts == nil {
+				tc.expectedMounts = []mount.Mount{}
+			}
 			assert.Equal(t, tc.expectedBinds, hostConf.Binds)
+			assert.Equal(t, tc.expectedMounts, hostConf.Mounts)
 		})
 	}
 }
