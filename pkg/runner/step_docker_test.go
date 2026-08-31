@@ -32,7 +32,9 @@ func TestStepDockerMain(t *testing.T) {
 	sd := &stepDocker{
 		RunContext: &RunContext{
 			StepResults: map[string]*model.StepResult{},
-			Config:      &Config{},
+			Config: &Config{
+				ContainerOptions: "--mount type=bind,source=/etc/ssl/certs/ca-certificates.crt,target=/etc/ssl/certs/ca-certificates.crt,readonly",
+			},
 			Run: &model.Run{
 				JobID: "1",
 				Workflow: &model.Workflow{
@@ -99,6 +101,7 @@ func TestStepDockerMain(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, "node:14", input.Image)
+	assert.Equal(t, sd.RunContext.Config.ContainerOptions, input.Options)
 
 	cm.AssertExpectations(t)
 }
