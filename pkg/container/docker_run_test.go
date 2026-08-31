@@ -14,10 +14,12 @@ import (
 	"github.com/nektos/act/pkg/common"
 
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDocker(t *testing.T) {
@@ -324,5 +326,33 @@ func TestCheckVolumes(t *testing.T) {
 			_, hostConf := cr.sanitizeConfig(ctx, &container.Config{}, &container.HostConfig{Binds: tc.binds})
 			assert.Equal(t, tc.expectedBinds, hostConf.Binds)
 		})
+	}
+}
+
+func TestOptionsMountSurvivesSanitize(t *testing.T) {
+	logger, _ := test.NewNullLogger()
+	ctx := common.WithLogger(context.Background(), logger)
+
+	source := "/etc/ssl/certs/ca-certificates.crt"
+	cr := &containerReference{
+		input: &NewContainerInput{
+			Options:      fmt.Sprintf("--mount type=bind,source=%s,target=%s,readonly", source, source),
+			NetworkMode:  "container:job",
+			ValidVolumes: []string{source},
+		},
+	}
+
+	config, hostConfig, err := cr.mergeContainerConfigs(ctx, &container.Config{}, &container.HostConfig{})
+	require.NoError(t, err)
+
+	_, hostConfig = cr.sanitizeConfig(ctx, config, hostConfig)
+
+	assert.Len(t, hostConfig.Mounts, 1)
+	if len(hostConfig.Mounts) == 1 {
+		m := hostConfig.Mounts[0]
+		assert.Equal(t, mount.TypeBind, m.Type)
+		assert.Equal(t, source, m.Source)
+		assert.Equal(t, source, m.Target)
+		assert.True(t, m.ReadOnly)
 	}
 }
